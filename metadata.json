@@ -1,0 +1,6 @@
+{
+  "name": "OmniMedia Downloader",
+  "description": "All-in-one high-speed video and audio downloader for YouTube, Facebook, Instagram, Pinterest, Twitter/X, TikTok, and all social platforms.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
