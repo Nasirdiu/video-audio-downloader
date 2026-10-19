@@ -308,7 +308,7 @@ export default function App() {
         {/* Clean Footer (Anti-Slop: Quiet copyright and site information) */}
         <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-500">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6 lg:px-8">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
               <span className="font-semibold text-slate-400">OmniMedia Downloader</span>
               <span>·</span>
               <span>
@@ -316,9 +316,21 @@ export default function App() {
                   ? 'High-Performance Video & Audio Extraction Suite'
                   : 'হাই-স্পিড সোশ্যাল ভিডিও ও অডিও ডাউনলোডার'}
               </span>
+              <span>·</span>
+              <span>
+                {lang === 'en' ? 'Created by ' : 'তৈরি করেছেন '}
+                <a
+                  href="https://nasir369.vercel.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-indigo-400 underline decoration-indigo-500/40 underline-offset-2 transition-colors hover:text-indigo-300 hover:decoration-indigo-300"
+                >
+                  nasir369
+                </a>
+              </span>
             </div>
 
-            <div className="flex items-center gap-4 text-slate-500">
+            <div className="flex flex-wrap items-center justify-center gap-3 text-slate-500 sm:justify-end">
               <span>YouTube</span>
               <span>·</span>
               <span>Facebook</span>
