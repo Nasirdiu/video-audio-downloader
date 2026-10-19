@@ -312,12 +312,6 @@ export default function App() {
               <span className="font-semibold text-slate-400">OmniMedia Downloader</span>
               <span>·</span>
               <span>
-                {lang === 'en'
-                  ? 'High-Performance Video & Audio Extraction Suite'
-                  : 'হাই-স্পিড সোশ্যাল ভিডিও ও অডিও ডাউনলোডার'}
-              </span>
-              <span>·</span>
-              <span>
                 {lang === 'en' ? 'Created by ' : 'তৈরি করেছেন '}
                 <a
                   href="https://nasir369.vercel.app/"
