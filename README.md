@@ -25,6 +25,7 @@ Developed by [nasir369](https://nasir369.vercel.app/).
 4. আপনার GitHub রিপোজিটরিটি সিলেক্ট করে **"Import"** এ ক্লিক করুন।
 5. Vercel স্বয়ংক্রিয়ভাবে সব সেটিংস শনাক্ত করবে:
    - **Framework Preset**: `Vite`
+   - **Install Command**: `npm install --legacy-peer-deps` (কনফিগার করা আছে)
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
 6. শুধু **"Deploy"** বাটনে চাপ দিন! ১ মিনিটের মধ্যে আপনার সাইট লাইভ হয়ে যাবে।
