@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { MediaItem } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { PLATFORMS_DATA } from '../utils/platformDetector';
-import { downloadMediaStream, ExportProgress } from '../utils/mediaExporter';
+import { downloadMediaStream, ExportProgress, shareOrSaveToMobileGallery, triggerBrowserDownload, isInAppBrowser } from '../utils/mediaExporter';
 import {
   Download,
   Film,
@@ -17,6 +17,11 @@ import {
   User,
   ShieldCheck,
   Sparkles,
+  Share2,
+  FolderDown,
+  Smartphone,
+  ExternalLink,
+  HelpCircle,
 } from 'lucide-react';
 
 interface MediaResultCardProps {
@@ -47,6 +52,14 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<ExportProgress | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lastDownloaded, setLastDownloaded] = useState<{
+    fileName: string;
+    blob: Blob;
+    blobUrl: string;
+    type: 'video' | 'audio' | 'thumbnail';
+    sizeMb: number;
+  } | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -57,6 +70,20 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
       setIsPlaying(false);
     } else {
       videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleShareToGallery = async () => {
+    if (!lastDownloaded) return;
+    setIsSharing(true);
+    try {
+      await shareOrSaveToMobileGallery(
+        lastDownloaded.blob,
+        lastDownloaded.fileName,
+        media.title
+      );
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -78,6 +105,14 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
         onProgress: (p) => setDownloadProgress(p),
       });
 
+      setLastDownloaded({
+        fileName: result.fileName,
+        blob: result.blob,
+        blobUrl: result.blobUrl,
+        type,
+        sizeMb: result.sizeMb,
+      });
+
       onDownloadComplete({
         media,
         format: type === 'thumbnail' ? 'JPG' : formatId.includes('mp3') ? 'MP3' : 'MP4',
@@ -87,8 +122,12 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
         type: type === 'thumbnail' ? 'image' : type,
       });
 
-      setSuccessMessage(`Downloaded: ${result.fileName}`);
-      setTimeout(() => setSuccessMessage(null), 4000);
+      setSuccessMessage(
+        lang === 'en'
+          ? `Saved: ${result.fileName}`
+          : `ফাইল প্রস্তুত হয়েছে: ${result.fileName}`
+      );
+      setTimeout(() => setSuccessMessage(null), 6000);
     } catch {
       // Error handling
       setSuccessMessage('Download completed.');
@@ -262,7 +301,70 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
             </div>
           )}
 
-          {successMessage && (
+          {/* Mobile Download Action & Save to Gallery Card */}
+          {lastDownloaded && (
+            <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/40 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{lang === 'en' ? 'Download Ready for Your Phone!' : 'ফাইল প্রস্তুত! ফোনে সেভ করুন:'}</span>
+                  </div>
+                  <p className="text-[11px] font-mono text-slate-300 truncate max-w-xs sm:max-w-md">
+                    {lastDownloaded.fileName}
+                  </p>
+                </div>
+                <span className="font-mono text-xs text-indigo-300 tabular-nums shrink-0">
+                  {lastDownloaded.sizeMb} MB
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleShareToGallery}
+                  disabled={isSharing}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 transition-colors"
+                >
+                  <Share2 className="h-4 w-4" />
+                  <span>
+                    {lang === 'en' ? 'Save / Share to Gallery' : 'গ্যালারি বা ফাইলে সেভ করুন'}
+                  </span>
+                </button>
+
+                <a
+                  href={lastDownloaded.blobUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4 text-indigo-400" />
+                  <span>
+                    {lang === 'en' ? 'Open & Play Directly' : 'সরাসরি ফোনে চালান'}
+                  </span>
+                </a>
+              </div>
+
+              {/* Mobile File Location Guide */}
+              <div className="rounded-lg bg-slate-950/70 p-3 text-[11px] text-slate-400 space-y-1 border border-slate-800">
+                <div className="font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Smartphone className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>{lang === 'en' ? 'Where is this file on your mobile?' : 'মোবাইলে ফাইলটি কোথায় খুঁজবেন?'}</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-slate-400 pl-1">
+                  <li>
+                    <strong className="text-slate-300">Android:</strong> ফোনের <code className="text-indigo-300">Files / My Files</code> অ্যাপ ➔ <code className="text-indigo-300">Downloads</code> ফোল্ডারে ফাইলটি জমা হয়েছে।
+                  </li>
+                  <li>
+                    <strong className="text-slate-300">iPhone:</strong> <code className="text-indigo-300">Files</code> অ্যাপ ➔ <code className="text-indigo-300">Downloads</code> ফোল্ডার খুলুন, অথবা উপরের &apos;গ্যালারিতে সেভ করুন&apos; চাপুন।
+                  </li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {successMessage && !lastDownloaded && (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/30 p-2.5 text-xs text-emerald-300">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span className="truncate">{successMessage}</span>

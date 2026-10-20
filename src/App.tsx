@@ -10,7 +10,8 @@ import { AudioTrimmerModal } from './components/AudioTrimmerModal';
 import { DownloadHistory } from './components/DownloadHistory';
 import { SupportedPlatformsGrid } from './components/SupportedPlatformsGrid';
 import { PlatformGuide } from './components/PlatformGuide';
-import { AlertCircle, Shield, Zap, Sparkles } from 'lucide-react';
+import { AlertCircle, Shield, Zap, Sparkles, AlertTriangle } from 'lucide-react';
+import { isInAppBrowser } from './utils/mediaExporter';
 
 const STORAGE_KEY = 'omnimedia_download_history_v1';
 
@@ -115,6 +116,12 @@ export default function App() {
     setHistory((prev) => prev.filter((it) => it.id !== id));
   };
 
+  // Detect in-app browser (e.g. Facebook/Instagram Webview)
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => {
+    setInApp(isInAppBrowser());
+  }, []);
+
   const toggleLanguage = () => {
     setLang((prev) => {
       const next = prev === 'en' ? 'bn' : 'en';
@@ -145,6 +152,20 @@ export default function App() {
           onLangToggle={toggleLanguage}
           historyCount={history.length}
         />
+
+        {/* Mobile In-App Browser Warning Banner */}
+        {inApp && (
+          <div className="border-b border-amber-500/30 bg-amber-950/70 px-4 py-2 text-xs text-amber-200">
+            <div className="mx-auto flex max-w-7xl items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+              <span>
+                {lang === 'en'
+                  ? 'Notice: You are using an in-app browser (Facebook/Instagram). To save downloads directly to your phone files, tap ⋮ at top right and select "Open in Chrome/Browser".'
+                  : 'নোটিস: আপনি Facebook/Instagram অ্যাপের ভেতর আছেন। ফাইল সরাসরি মেমোরিতে সেভ করতে উপরের ৩-ডটে চাপ দিয়ে "Open in Chrome / Browser" করুন।'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Main Content Viewport */}
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8 space-y-10">

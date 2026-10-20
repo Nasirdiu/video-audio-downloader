@@ -233,6 +233,30 @@ export const PlatformGuide: React.FC<PlatformGuideProps> = ({ lang }) => {
           <span>Tip: {currentGuide.tips}</span>
         </div>
       </div>
+
+      {/* Mobile Location Troubleshooting Section */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 backdrop-blur-md sm:p-6 space-y-3">
+        <div className="flex items-center gap-2">
+          <Smartphone className="h-5 w-5 text-indigo-400" />
+          <h3 className="text-sm font-bold text-white">
+            {lang === 'en' ? 'Where are downloaded files saved on mobile?' : 'মোবাইলে ডাউনলোড করার পর ফাইলগুলো কোথায় পাবেন?'}
+          </h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-1.5">
+            <span className="font-bold text-indigo-300">🤖 Android ফোন:</span>
+            <p className="text-slate-400">
+              আপনার ফোনের <strong>Files</strong> বা <strong>My Files</strong> অ্যাপ খুলুন। সেখানে <strong>Downloads</strong> ফোল্ডারে ভিডিও বা অডিও ফাইলটি জমা থাকে। এছাড়া ডাউনলোড বাটনের নিচের &apos;গ্যালারিতে পাঠান&apos; চাপলে সরাসরি গ্যালারিতে সেভ করা যায়।
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-1.5">
+            <span className="font-bold text-indigo-300">🍎 iPhone / iPad:</span>
+            <p className="text-slate-400">
+              আইফোনের <strong>Files</strong> অ্যাপে গিয়ে <strong>Downloads</strong> ফোল্ডার খুলুন। ভিডিওতে চেপে ধরে <strong>&apos;Save Video&apos;</strong> চাপলে সেটি সরাসরি Photos / Gallery তে সেভ হয়ে যাবে।
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
