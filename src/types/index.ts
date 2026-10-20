@@ -50,6 +50,7 @@ export interface MediaItem {
   audioFormats: AudioFormatOption[];
   sampleVideoUrl?: string;
   sampleAudioUrl?: string;
+  youtubeId?: string;
 }
 
 export interface DownloadHistoryItem {

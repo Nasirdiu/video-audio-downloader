@@ -54,11 +54,11 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastDownloaded, setLastDownloaded] = useState<{
     fileName: string;
-    blob: Blob;
     blobUrl: string;
     type: 'video' | 'audio' | 'thumbnail';
     sizeMb: number;
   } | null>(null);
+  const downloadedBlobRef = useRef<Blob | null>(null);
   const [isSharing, setIsSharing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -74,11 +74,11 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
   };
 
   const handleShareToGallery = async () => {
-    if (!lastDownloaded) return;
+    if (!lastDownloaded || !downloadedBlobRef.current) return;
     setIsSharing(true);
     try {
       await shareOrSaveToMobileGallery(
-        lastDownloaded.blob,
+        downloadedBlobRef.current,
         lastDownloaded.fileName,
         media.title
       );
@@ -105,9 +105,9 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
         onProgress: (p) => setDownloadProgress(p),
       });
 
+      downloadedBlobRef.current = result.blob;
       setLastDownloaded({
         fileName: result.fileName,
-        blob: result.blob,
         blobUrl: result.blobUrl,
         type,
         sizeMb: result.sizeMb,
@@ -187,17 +187,37 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
         {/* Left: Player & Visualizer (5 columns) */}
         <div className="space-y-3 lg:col-span-5">
           <div className="group relative overflow-hidden rounded-xl border border-slate-800 bg-black aspect-video flex items-center justify-center">
-            {media.sampleVideoUrl ? (
-              <video
-                ref={videoRef}
-                src={media.sampleVideoUrl}
-                poster={media.thumbnailUrl}
-                playsInline
-                loop
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
+            {media.platform === 'youtube' && media.youtubeId ? (
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${media.youtubeId}?autoplay=0&rel=0`}
                 className="h-full w-full object-cover"
+                title={media.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
               />
+            ) : media.sampleVideoUrl ? (
+              <>
+                <video
+                  ref={videoRef}
+                  src={media.sampleVideoUrl}
+                  poster={media.thumbnailUrl}
+                  playsInline
+                  loop
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  className="h-full w-full object-cover"
+                />
+                {/* Play/Pause Overlay */}
+                <button
+                  onClick={togglePlay}
+                  className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/40"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600/90 text-white shadow-lg transition-transform group-hover:scale-110">
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 translate-x-0.5" />}
+                  </div>
+                </button>
+              </>
             ) : (
               <img
                 src={media.thumbnailUrl}
@@ -207,19 +227,8 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
               />
             )}
 
-            {/* Play/Pause Overlay */}
-            <button
-              onClick={togglePlay}
-              className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/40"
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600/90 text-white shadow-lg transition-transform group-hover:scale-110">
-                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 translate-x-0.5" />}
-              </div>
-            </button>
-
             {/* Platform watermark free indicator */}
-            <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium text-emerald-400 backdrop-blur-sm">
+            <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium text-emerald-400 backdrop-blur-sm pointer-events-none">
               <ShieldCheck className="h-3 w-3" />
               <span>{t.mediaCard.noWatermark}</span>
             </div>
@@ -244,6 +253,46 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
 
         {/* Right: Format Selector & Download Options (7 columns) */}
         <div className="space-y-4 lg:col-span-7">
+          {/* Exact YouTube Direct Download Hub */}
+          {media.platform === 'youtube' && media.youtubeId && (
+            <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-red-300 flex items-center gap-1.5">
+                  <Film className="h-3.5 w-3.5 text-red-400" />
+                  <span>
+                    {lang === 'en'
+                      ? 'Download This Exact YouTube Video (1-Click):'
+                      : 'এই নির্দিষ্ট YouTube ভিডিওটি সরাসরি ডাউনলোড করুন:'}
+                  </span>
+                </span>
+                <span className="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded font-mono">
+                  Exact Link Video
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <a
+                  href={`https://www.ssyoutube.com/watch?v=${media.youtubeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-500 py-2.5 px-3 font-semibold text-white shadow-sm transition-colors text-center"
+                >
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  <span>{lang === 'en' ? 'Direct Full HD (MP4)' : 'সরাসরি Full HD (MP4)'}</span>
+                </a>
+
+                <a
+                  href={`https://y2mate.nu/en/youtube-to-mp3/${media.youtubeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 py-2.5 px-3 font-semibold text-slate-200 transition-colors text-center"
+                >
+                  <Music className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                  <span>{lang === 'en' ? 'Direct Audio (320k MP3)' : 'সরাসরি অডিও (320k MP3)'}</span>
+                </a>
+              </div>
+            </div>
+          )}
           {/* Format Category Tabs */}
           <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/60 p-1">
             <button

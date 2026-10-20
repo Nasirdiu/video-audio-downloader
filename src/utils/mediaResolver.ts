@@ -188,30 +188,43 @@ export async function resolveMediaUrl(rawUrl: string): Promise<MediaItem> {
     const ytId = extractYouTubeId(cleanUrl);
     let oEmbedTitle: string | null = null;
     let oEmbedAuthor: string | null = null;
+    let oEmbedThumb: string | null = null;
 
     try {
-      const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`);
+      // Official Google YouTube oEmbed endpoint (CORS-friendly and instant)
+      const resp = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`);
       if (resp.ok) {
         const data = await resp.json();
         if (data.title) oEmbedTitle = data.title;
         if (data.author_name) oEmbedAuthor = data.author_name;
+        if (data.thumbnail_url) oEmbedThumb = data.thumbnail_url;
       }
     } catch {
-      // ignore network errors on oembed
+      try {
+        const resp2 = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`);
+        if (resp2.ok) {
+          const data2 = await resp2.json();
+          if (data2.title) oEmbedTitle = data2.title;
+          if (data2.author_name) oEmbedAuthor = data2.author_name;
+        }
+      } catch {
+        // ignore
+      }
     }
 
     const durationSec = 184; // 3m 04s
     const isShort = cleanUrl.includes('/shorts/');
     const thumbnail = ytId
-      ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`
-      : SAMPLE_PREVIEWS.youtube.thumbnail;
+      ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
+      : oEmbedThumb || SAMPLE_PREVIEWS.youtube.thumbnail;
 
     return {
       id: ytId || 'yt_' + Date.now(),
       originalUrl: cleanUrl,
       platform: 'youtube',
-      title: oEmbedTitle || (isShort ? 'Viral YouTube Short - High Energy Motion' : 'YouTube 4K Ultra HD Video Stream'),
-      author: oEmbedAuthor || '@OfficialCreator',
+      youtubeId: ytId || undefined,
+      title: oEmbedTitle || (ytId ? `YouTube Video - ${ytId}` : 'YouTube Video Stream'),
+      author: oEmbedAuthor || '@YouTubeCreator',
       duration: durationSec,
       durationFormatted: '03:04',
       thumbnailUrl: thumbnail,
