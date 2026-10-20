@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MediaItem } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { createSyntheticAudioBlob, triggerBrowserDownload, sanitizeFilename } from '../utils/mediaExporter';
+import { createValidMp3Blob, triggerBrowserDownload, sanitizeFilename } from '../utils/mediaExporter';
 import {
   X,
   Play,
@@ -97,14 +97,29 @@ export const AudioTrimmerModal: React.FC<AudioTrimmerModalProps> = ({
     // Simulate audio rendering
     await new Promise((r) => setTimeout(r, 800));
 
-    // Synthesize real playable audio blob for the selected length
-    const blob = createSyntheticAudioBlob(segmentDuration, 440);
+    const estSize = Math.max(2.2, Math.round(((segmentDuration / 60) * (Number(bitrate) / 8) * 0.25) * 10) / 10 || 3.2);
+    let blob: Blob;
+    try {
+      const audioUrl = media.sampleAudioUrl || 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3';
+      const resp = await fetch(audioUrl, { mode: 'cors' });
+      if (resp.ok) {
+        const fetched = await resp.blob();
+        if (fetched.size > 50000) {
+          blob = new Blob([fetched], { type: 'audio/mpeg' });
+        } else {
+          blob = createValidMp3Blob(estSize, Number(bitrate));
+        }
+      } else {
+        blob = createValidMp3Blob(estSize, Number(bitrate));
+      }
+    } catch {
+      blob = createValidMp3Blob(estSize, Number(bitrate));
+    }
+
     const cleanName = sanitizeFilename(media.title);
     const fileName = `[Trimmed_${formatSeconds(startTime)}-${formatSeconds(endTime)}]_${cleanName}_${bitrate}kbps.mp3`;
 
     triggerBrowserDownload(blob, fileName);
-
-    const estSize = Math.round(((segmentDuration / 60) * (Number(bitrate) / 8) * 0.06) * 100) / 100 || 1.2;
 
     onSaveToHistory({
       media,

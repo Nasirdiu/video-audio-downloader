@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { DownloadHistoryItem, SupportedPlatform } from '../types';
 import { PLATFORMS_DATA } from '../utils/platformDetector';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { createSyntheticAudioBlob, triggerBrowserDownload } from '../utils/mediaExporter';
+import { createSyntheticAudioBlob, createValidMp4Blob, triggerBrowserDownload } from '../utils/mediaExporter';
 import {
   Download,
   Trash2,
@@ -42,14 +42,32 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({
 
   const totalSizeMb = history.reduce((acc, it) => acc + (it.fileSizeMb || 0), 0);
 
-  const handleReDownload = (item: DownloadHistoryItem) => {
+  const handleReDownload = async (item: DownloadHistoryItem) => {
+    try {
+      if (item.type === 'audio') {
+        const resp = await fetch('https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3', { mode: 'cors' });
+        if (resp.ok) {
+          const b = await resp.blob();
+          triggerBrowserDownload(new Blob([b], { type: 'audio/mpeg' }), item.fileName);
+          return;
+        }
+      } else if (item.type === 'video') {
+        const resp = await fetch('https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4', { mode: 'cors' });
+        if (resp.ok) {
+          const b = await resp.blob();
+          triggerBrowserDownload(new Blob([b], { type: 'video/mp4' }), item.fileName);
+          return;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
     if (item.type === 'audio') {
-      const blob = createSyntheticAudioBlob(5, 440);
+      const blob = createSyntheticAudioBlob(15, 440);
       triggerBrowserDownload(blob, item.fileName);
     } else {
-      const blob = new Blob(['OmniMedia Stream Cache'], {
-        type: item.type === 'image' ? 'image/jpeg' : 'video/mp4',
-      });
+      const blob = createValidMp4Blob(item.fileSizeMb || 12.5);
       triggerBrowserDownload(blob, item.fileName);
     }
   };

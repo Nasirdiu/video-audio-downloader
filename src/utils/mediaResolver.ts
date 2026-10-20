@@ -2,70 +2,71 @@ import { MediaItem, SupportedPlatform, VideoFormatOption, AudioFormatOption } fr
 import { detectPlatform, extractYouTubeId, PLATFORMS_DATA } from './platformDetector';
 
 // Verified royalty-free sample video & audio streams for direct in-app preview
+// Verified, high-speed, CORS-enabled sample video & audio streams that play cleanly on Desktop and Mobile
 const SAMPLE_PREVIEWS: Record<SupportedPlatform, { video: string; audio: string; thumbnail: string }> = {
   youtube: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=80',
   },
   facebook: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=1080&auto=format&fit=crop&q=80',
   },
   instagram: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/store-aisle-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1080&auto=format&fit=crop&q=80',
   },
   pinterest: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/classroom.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1080&auto=format&fit=crop&q=80',
   },
   twitter: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/people-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1080&auto=format&fit=crop&q=80',
   },
   tiktok: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1516251193007-45ef944ab0c6?w=1080&auto=format&fit=crop&q=80',
   },
   reddit: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1080&auto=format&fit=crop&q=80',
   },
   threads: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/classroom.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1614680376593-902f749f7ffc?w=1080&auto=format&fit=crop&q=80',
   },
   vimeo: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/store-aisle-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1080&auto=format&fit=crop&q=80',
   },
   linkedin: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080&auto=format&fit=crop&q=80',
   },
   soundcloud: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/classroom.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1080&auto=format&fit=crop&q=80',
   },
   twitch: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1080&auto=format&fit=crop&q=80',
   },
   generic: {
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    audio: 'https://cdn.freesound.org/previews/612/612095_5674468-lq.mp3',
+    video: 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4',
+    audio: 'https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3',
     thumbnail: 'https://images.unsplash.com/photo-1516251193007-45ef944ab0c6?w=1080&auto=format&fit=crop&q=80',
   }
 };
