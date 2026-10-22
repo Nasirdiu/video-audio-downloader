@@ -44,18 +44,18 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({
 
   const handleReDownload = async (item: DownloadHistoryItem) => {
     try {
-      if (item.type === 'audio') {
-        const resp = await fetch('https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Sample-files/master/sample.mp3', { mode: 'cors' });
-        if (resp.ok) {
-          const b = await resp.blob();
-          triggerBrowserDownload(new Blob([b], { type: 'audio/mpeg' }), item.fileName);
-          return;
-        }
-      } else if (item.type === 'video') {
-        const resp = await fetch('https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4', { mode: 'cors' });
-        if (resp.ok) {
-          const b = await resp.blob();
-          triggerBrowserDownload(new Blob([b], { type: 'video/mp4' }), item.fileName);
+      const extRes = await fetch(`/api/extract?url=${encodeURIComponent(item.url)}&format=${item.type === 'audio' ? 'mp3' : '1080'}`);
+      if (extRes.ok) {
+        const extData = await extRes.json();
+        if (extData.success && extData.downloadUrl) {
+          const a = document.createElement('a');
+          a.href = extData.downloadUrl;
+          a.download = item.fileName;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            if (document.body.contains(a)) document.body.removeChild(a);
+          }, 1500);
           return;
         }
       }

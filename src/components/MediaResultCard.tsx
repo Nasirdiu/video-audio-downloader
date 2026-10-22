@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { MediaItem } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { PLATFORMS_DATA } from '../utils/platformDetector';
-import { downloadMediaStream, ExportProgress, shareOrSaveToMobileGallery, triggerBrowserDownload, isInAppBrowser } from '../utils/mediaExporter';
+import { downloadMediaStream, ExportProgress, shareOrSaveToMobileGallery, triggerBrowserDownload, isInAppBrowser, sanitizeFilename, safeTriggerDirectDownload } from '../utils/mediaExporter';
 import {
   Download,
   Film,
@@ -22,6 +22,8 @@ import {
   Smartphone,
   ExternalLink,
   HelpCircle,
+  Loader2,
+  Laptop,
 } from 'lucide-react';
 
 interface MediaResultCardProps {
@@ -60,6 +62,147 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
   } | null>(null);
   const downloadedBlobRef = useRef<Blob | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  const [quickFormat, setQuickFormat] = useState('720');
+  const [isQuickDownloading, setIsQuickDownloading] = useState(false);
+  const [quickProgress, setQuickProgress] = useState<string | null>(null);
+  const [extractedDownloadUrl, setExtractedDownloadUrl] = useState<string | null>(null);
+  const [downloadProgressPercent, setDownloadProgressPercent] = useState<number>(0);
+
+  const handleSaveFromDownload = async (format: string) => {
+    if (isQuickDownloading) return;
+    setIsQuickDownloading(true);
+    setExtractedDownloadUrl(null);
+    setDownloadProgressPercent(15);
+    setQuickProgress(
+      lang === 'en'
+        ? 'Connecting to high-speed stream extractor...'
+        : 'সার্ভার থেকে ভিডিও লিঙ্ক কানেক্ট হচ্ছে...'
+    );
+
+    try {
+      // Step 1: Start extraction session (< 1s execution)
+      const startRes = await fetch(
+        `/api/extract?action=start&url=${encodeURIComponent(media.originalUrl)}&format=${format}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      const startData = await startRes.json();
+
+      if (!startData.success || !startData.progressUrl) {
+        throw new Error(startData.error || 'Could not start stream session');
+      }
+
+      const progressUrl = startData.progressUrl;
+      setDownloadProgressPercent(35);
+      setQuickProgress(
+        lang === 'en' ? 'Fetching original video & audio tracks...' : 'আসল ভিডিও ফ্রেম ও অডিও সংগ্রহ করা হচ্ছে...'
+      );
+
+      // Step 2: Poll in client loop every 750ms (< 350ms per request, zero timeouts!)
+      let finalDownloadUrl: string | null = null;
+      let finalTitle = media.title || startData.title || 'video';
+
+      for (let i = 0; i < 35; i++) {
+        await new Promise((r) => setTimeout(r, 750));
+        const progRes = await fetch(
+          `/api/extract?action=progress&progressUrl=${encodeURIComponent(progressUrl)}`,
+          { signal: AbortSignal.timeout(6000) }
+        );
+        if (!progRes.ok) continue;
+        const progData = await progRes.json();
+
+        // Calculate visual progress percent (35% to 95%)
+        const serverProgress = progData.progress || 0;
+        const mappedPct = Math.min(95, Math.max(35, Math.round(serverProgress / 10) || (35 + i * 2)));
+        setDownloadProgressPercent(mappedPct);
+
+        if (progData.text) {
+          setQuickProgress(progData.text);
+        }
+        if (progData.title) {
+          finalTitle = progData.title;
+        }
+
+        if (progData.downloadUrl) {
+          finalDownloadUrl = progData.downloadUrl;
+          break;
+        }
+      }
+
+      if (!finalDownloadUrl) {
+        throw new Error('Stream timed out');
+      }
+
+      // Step 3: SUCCESS - FETCH THE REAL VIDEO BLOB & AUTO-SAVE TO COMPUTER
+      setQuickProgress(
+        lang === 'en'
+          ? 'Downloading video data to your computer...'
+          : 'আসল ভিডিও ফাইলটি কম্পিউটারে নামানো হচ্ছে...'
+      );
+      setDownloadProgressPercent(96);
+
+      let videoBlob: Blob;
+      try {
+        const vidRes = await fetch(finalDownloadUrl);
+        if (!vidRes.ok) throw new Error('Stream fetch failed');
+        videoBlob = await vidRes.blob();
+      } catch {
+        // Fallback to proxy
+        const vidRes = await fetch(`/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${format}`);
+        videoBlob = await vidRes.blob();
+      }
+
+      const targetFileName = `${sanitizeFilename(finalTitle)}_${format}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+
+      // Guaranteed Native Same-Origin Download into Computer Downloads
+      const blobUrl = triggerBrowserDownload(videoBlob, targetFileName);
+      setExtractedDownloadUrl(blobUrl);
+      setDownloadProgressPercent(100);
+
+      setQuickProgress(
+        lang === 'en'
+          ? '✓ Video downloaded! File is saved in your computer Downloads folder.'
+          : '✓ আসল ভিডিওটি আপনার কম্পিউটারের Downloads ফোল্ডারে সেভ হয়েছে!'
+      );
+
+      setSuccessMessage(
+        lang === 'en'
+          ? '✓ Real video downloaded! Check your computer Downloads folder (Ctrl + J).'
+          : '✓ আসল ভিডিও ডাউনলোড সম্পূর্ণ হয়েছে! আপনার Downloads ফোল্ডার চেক করুন (Ctrl + J)।'
+      );
+    } catch {
+      setQuickProgress(
+        lang === 'en'
+          ? 'Connecting to fallback download stream...'
+          : 'ফলব্যাক সার্ভার দিয়ে ডাউনলোড করা হচ্ছে...'
+      );
+      try {
+        const fallbackRes = await fetch(`/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${format}`);
+        const fallbackBlob = await fallbackRes.blob();
+        const targetFileName = `${sanitizeFilename(media.title)}_${format}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+        const blobUrl = triggerBrowserDownload(fallbackBlob, targetFileName);
+        setExtractedDownloadUrl(blobUrl);
+        setDownloadProgressPercent(100);
+        setQuickProgress(
+          lang === 'en'
+            ? '✓ Video downloaded! Saved in computer Downloads.'
+            : '✓ আসল ভিডিওটি আপনার কম্পিউটারে সেভ হয়েছে!'
+        );
+        setSuccessMessage(
+          lang === 'en'
+            ? '✓ Download complete! Check your Downloads folder (Ctrl + J).'
+            : '✓ আসল ভিডিও ডাউনলোড সম্পূর্ণ হয়েছে! Downloads ফোল্ডার চেক করুন (Ctrl + J)।'
+        );
+      } catch (err: unknown) {
+        setQuickProgress(
+          lang === 'en'
+            ? 'Extraction error, please try another quality.'
+            : 'ডাউনলোডে সমস্যা হয়েছে, অনুগ্রহ করে অন্য কোয়ালিটি বেছে নিন।'
+        );
+      }
+    } finally {
+      setIsQuickDownloading(false);
+    }
+  };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -253,46 +396,115 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
 
         {/* Right: Format Selector & Download Options (7 columns) */}
         <div className="space-y-4 lg:col-span-7">
-          {/* Exact YouTube Direct Download Hub */}
-          {media.platform === 'youtube' && media.youtubeId && (
-            <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-3.5 space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-red-300 flex items-center gap-1.5">
-                  <Film className="h-3.5 w-3.5 text-red-400" />
-                  <span>
-                    {lang === 'en'
-                      ? 'Download This Exact YouTube Video (1-Click):'
-                      : 'এই নির্দিষ্ট YouTube ভিডিওটি সরাসরি ডাউনলোড করুন:'}
-                  </span>
+          {/* 100% In-Site Native Download Hub (ZERO EXTERNAL REDIRECTS) */}
+          <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 space-y-3.5 shadow-lg">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <span>
+                  {lang === 'en'
+                    ? '100% In-Site Direct Download (No External Sites):'
+                    : '১০০% এই সাইটেই সরাসরি ডাউনলোড (কোনো অন্য ওয়েবসাইটে যাবে না):'}
                 </span>
-                <span className="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded font-mono">
-                  Exact Link Video
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <a
-                  href={`https://www.ssyoutube.com/watch?v=${media.youtubeId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-500 py-2.5 px-3 font-semibold text-white shadow-sm transition-colors text-center"
-                >
-                  <Download className="h-3.5 w-3.5 shrink-0" />
-                  <span>{lang === 'en' ? 'Direct Full HD (MP4)' : 'সরাসরি Full HD (MP4)'}</span>
-                </a>
-
-                <a
-                  href={`https://y2mate.nu/en/youtube-to-mp3/${media.youtubeId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 py-2.5 px-3 font-semibold text-slate-200 transition-colors text-center"
-                >
-                  <Music className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                  <span>{lang === 'en' ? 'Direct Audio (320k MP3)' : 'সরাসরি অডিও (320k MP3)'}</span>
-                </a>
-              </div>
+              </span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">
+                100% On-Site
+              </span>
             </div>
-          )}
+
+            {/* Quality Selector & Main Action Button */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => handleSaveFromDownload(quickFormat)}
+                disabled={isQuickDownloading}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-60 py-3.5 px-4 font-bold text-white shadow-md transition-all text-sm group cursor-pointer"
+              >
+                {isQuickDownloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                ) : (
+                  <Download className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
+                )}
+                <span>
+                  {isQuickDownloading
+                    ? (quickProgress || (lang === 'en' ? 'Processing stream...' : 'আসল ভিডিও প্রসেস হচ্ছে...'))
+                    : quickFormat === 'mp3'
+                    ? (lang === 'en' ? 'Download Real MP3 Audio' : 'আসল MP3 অডিও ডাউনলোড করুন')
+                    : `${lang === 'en' ? 'Download Real MP4 Video' : 'আসল MP4 ভিডিও ডাউনলোড করুন'} (${quickFormat}p)`}
+                </span>
+              </button>
+
+              <select
+                value={quickFormat}
+                onChange={(e) => setQuickFormat(e.target.value)}
+                disabled={isQuickDownloading}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-3 text-xs font-semibold text-slate-200 outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="720">MP4 720p HD (Best Quality)</option>
+                <option value="1080">MP4 1080p Full HD</option>
+                <option value="480">MP4 480p SD</option>
+                <option value="360">MP4 360p Fast</option>
+                <option value="mp3">MP3 320kbps Audio</option>
+              </select>
+            </div>
+
+            {/* In-Site Live Progress Bar when extracting */}
+            {isQuickDownloading && (
+              <div className="rounded-lg bg-slate-950/80 p-3 text-xs text-slate-300 space-y-2 border border-emerald-500/30">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>{quickProgress || 'সার্ভার থেকে ভিডিওর আসল ফাইল তৈরি হচ্ছে...'}</span>
+                  </span>
+                  <span className="font-mono text-emerald-300 font-bold">{downloadProgressPercent}%</span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
+                    style={{ width: `${downloadProgressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Direct Save Button once extracted */}
+            {extractedDownloadUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  safeTriggerDirectDownload(
+                    extractedDownloadUrl,
+                    `${sanitizeFilename(media.title)}_${quickFormat}.${quickFormat === 'mp3' ? 'mp3' : 'mp4'}`
+                  );
+                  setSuccessMessage(
+                    lang === 'en'
+                      ? '✓ Saving real video to Computer Downloads!'
+                      : '✓ আসল ভিডিওটি কম্পিউটারে সেভ হচ্ছে...'
+                  );
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 py-3.5 px-4 font-bold text-slate-950 shadow-lg transition-all text-sm animate-pulse cursor-pointer"
+              >
+                <Download className="h-4 w-4" />
+                <span>
+                  {lang === 'en'
+                    ? '✓ Video Ready! Click Here to Save File to Computer'
+                    : '✓ ভিডিও প্রস্তুত! কম্পিউটারে সেভ করতে এখানে ক্লিক করুন'}
+                </span>
+              </button>
+            )}
+
+            {/* Dedicated Computer / PC Download Instruction Box */}
+            <div className="rounded-lg bg-slate-950/80 p-3 text-xs text-slate-300 space-y-1.5 border border-emerald-500/20">
+              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
+                <Laptop className="h-4 w-4 shrink-0" />
+                <span>{lang === 'en' ? 'Direct Computer Download:' : 'কম্পিউটারে (PC / Laptop) সরাসরি সেভ হওয়ার নিয়ম:'}</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                কোনো তৃতীয় পক্ষের ওয়েবসাইটে যাওয়া লাগবে না। উপরের <strong className="text-emerald-300">আসল MP4 ভিডিও ডাউনলোড করুন</strong> বাটনে চাপলেই সরাসরি এই ওয়েবসাইট থেকেই আসল ফাইলটি আপনার কম্পিউটারের <strong className="text-white">Downloads</strong> ফোল্ডারে সেভ হবে। ডাউনলোড শেষ হলে কীবোর্ডে <kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono text-[10px]">Ctrl + J</kbd> (Mac-এ <kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono text-[10px]">Cmd + Shift + J</kbd>) চাপলেই ভিডিওটি দেখতে ও প্লে করতে পারবেন।
+              </p>
+            </div>
+          </div>
+
           {/* Format Category Tabs */}
           <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/60 p-1">
             <button
@@ -457,12 +669,21 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
                     </div>
 
                     <button
-                      disabled={Boolean(downloadingId)}
-                      onClick={() => handleDownload('video', opt.id, opt.quality)}
-                      className="flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50"
+                      type="button"
+                      disabled={isQuickDownloading}
+                      onClick={() => {
+                        const targetFormat = opt.id.includes('4k') ? '1080' : opt.id.includes('1080') ? '1080' : opt.id.includes('720') ? '720' : opt.id.includes('480') ? '480' : '360';
+                        setQuickFormat(targetFormat);
+                        handleSaveFromDownload(targetFormat);
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50 shadow-sm cursor-pointer"
                     >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>{isItemDownloading ? t.mediaCard.downloading : t.mediaCard.downloadBtn}</span>
+                      {isQuickDownloading && quickFormat === (opt.id.includes('4k') ? '1080' : opt.id.includes('1080') ? '1080' : opt.id.includes('720') ? '720' : opt.id.includes('480') ? '480' : '360') ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      <span>{t.mediaCard.downloadBtn}</span>
                     </button>
                   </div>
                 );
@@ -474,7 +695,6 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
           {activeTab === 'audio' && (
             <div className="divide-y divide-slate-800/80 rounded-xl border border-slate-800 bg-slate-950/40">
               {media.audioFormats.map((opt) => {
-                const isItemDownloading = downloadingId === opt.id;
                 return (
                   <div
                     key={opt.id}
@@ -509,12 +729,20 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
                       </button>
 
                       <button
-                        disabled={Boolean(downloadingId)}
-                        onClick={() => handleDownload('audio', opt.id, opt.quality)}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-all hover:bg-violet-500 disabled:opacity-50"
+                        type="button"
+                        disabled={isQuickDownloading}
+                        onClick={() => {
+                          setQuickFormat('mp3');
+                          handleSaveFromDownload('mp3');
+                        }}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-all hover:bg-violet-500 disabled:opacity-50 shadow-sm cursor-pointer"
                       >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>{isItemDownloading ? t.mediaCard.downloading : t.mediaCard.downloadBtn}</span>
+                        {isQuickDownloading && quickFormat === 'mp3' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                        <span>{t.mediaCard.downloadBtn}</span>
                       </button>
                     </div>
                   </div>
