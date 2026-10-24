@@ -76,82 +76,33 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
     setDownloadProgressPercent(15);
     setQuickProgress(
       lang === 'en'
-        ? 'Connecting to high-speed stream extractor...'
-        : 'সার্ভার থেকে ভিডিও লিঙ্ক কানেক্ট হচ্ছে...'
+        ? 'Connecting to the download server...'
+        : 'ডাউনলোড সার্ভারের সাথে সংযোগ করা হচ্ছে...'
     );
 
     try {
-      // Step 1: Start extraction session (< 1s execution)
-      const startRes = await fetch(
-        `/api/extract?action=start&url=${encodeURIComponent(media.originalUrl)}&format=${format}`,
-        { signal: AbortSignal.timeout(10000) }
-      );
-      const startData = await startRes.json();
-
-      if (!startData.success || !startData.progressUrl) {
-        throw new Error(startData.error || 'Could not start stream session');
-      }
-
-      const progressUrl = startData.progressUrl;
-      setDownloadProgressPercent(35);
-      setQuickProgress(
-        lang === 'en' ? 'Fetching original video & audio tracks...' : 'আসল ভিডিও ফ্রেম ও অডিও সংগ্রহ করা হচ্ছে...'
-      );
-
-      // Step 2: Poll in client loop every 750ms (< 350ms per request, zero timeouts!)
-      let finalDownloadUrl: string | null = null;
-      let finalTitle = media.title || startData.title || 'video';
-
-      for (let i = 0; i < 35; i++) {
-        await new Promise((r) => setTimeout(r, 750));
-        const progRes = await fetch(
-          `/api/extract?action=progress&progressUrl=${encodeURIComponent(progressUrl)}`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        if (!progRes.ok) continue;
-        const progData = await progRes.json();
-
-        // Calculate visual progress percent (35% to 95%)
-        const serverProgress = progData.progress || 0;
-        const mappedPct = Math.min(95, Math.max(35, Math.round(serverProgress / 10) || (35 + i * 2)));
-        setDownloadProgressPercent(mappedPct);
-
-        if (progData.text) {
-          setQuickProgress(progData.text);
-        }
-        if (progData.title) {
-          finalTitle = progData.title;
-        }
-
-        if (progData.downloadUrl) {
-          finalDownloadUrl = progData.downloadUrl;
-          break;
-        }
-      }
-
-      if (!finalDownloadUrl) {
-        throw new Error('Stream timed out');
-      }
-
-      // Step 3: SUCCESS - FETCH THE REAL VIDEO BLOB & AUTO-SAVE TO COMPUTER
       setQuickProgress(
         lang === 'en'
-          ? 'Downloading video data to your computer...'
-          : 'আসল ভিডিও ফাইলটি কম্পিউটারে নামানো হচ্ছে...'
+          ? 'The server is preparing your download...'
+          : 'সার্ভার আপনার ডাউনলোড প্রস্তুত করছে...'
       );
-      setDownloadProgressPercent(96);
+      setDownloadProgressPercent(35);
 
-      let videoBlob: Blob;
-      try {
-        const vidRes = await fetch(finalDownloadUrl);
-        if (!vidRes.ok) throw new Error('Stream fetch failed');
-        videoBlob = await vidRes.blob();
-      } catch {
-        // Fallback to proxy
-        const vidRes = await fetch(`/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${format}`);
-        if (!vidRes.ok) throw new Error(await vidRes.text() || 'Stream fetch failed');
-        videoBlob = await vidRes.blob();
+      const response = await fetch(
+        `/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${encodeURIComponent(format)}&title=${encodeURIComponent(media.title)}`
+      );
+      if (!response.ok) {
+        throw new Error((await response.text()) || 'The download server could not fetch this media.');
       }
+
+      setDownloadProgressPercent(80);
+      setQuickProgress(
+        lang === 'en'
+          ? 'Receiving the media file from the server...'
+          : 'সার্ভার থেকে মিডিয়া ফাইল গ্রহণ করা হচ্ছে...'
+      );
+      let videoBlob = await response.blob();
+      setDownloadProgressPercent(95);
 
       let downloadFormat = format;
       if (!isAudioFormat) {
@@ -162,9 +113,8 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
           setQuickFormat(downloadFormat);
         }
       }
-      const targetFileName = `${sanitizeFilename(finalTitle)}_${downloadFormat}.${isAudioFormat ? downloadFormat : 'mp4'}`;
+      const targetFileName = `${sanitizeFilename(media.title)}_${downloadFormat}.${isAudioFormat ? downloadFormat : 'mp4'}`;
 
-      // Guaranteed Native Same-Origin Download into Computer Downloads
       const blobUrl = triggerBrowserDownload(videoBlob, targetFileName);
       setExtractedDownloadUrl(blobUrl);
       setDownloadProgressPercent(100);
@@ -190,46 +140,11 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
         setSuccessMessage(null);
         return;
       }
-
       setQuickProgress(
         lang === 'en'
-          ? 'Connecting to fallback download stream...'
-          : 'ফলব্যাক সার্ভার দিয়ে ডাউনলোড করা হচ্ছে...'
+          ? err instanceof Error ? err.message : 'Download failed. Please try another quality.'
+          : err instanceof Error ? err.message : 'ডাউনলোড ব্যর্থ হয়েছে। অন্য কোয়ালিটি চেষ্টা করুন।'
       );
-      try {
-        const fallbackRes = await fetch(`/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${format}`);
-        if (!fallbackRes.ok) throw new Error(await fallbackRes.text() || 'Fallback download failed');
-        let fallbackBlob = await fallbackRes.blob();
-        let downloadFormat = format;
-        if (!isAudioFormat) {
-          const verifiedVideo = await ensureMp4HasAudio(fallbackBlob, format, media.originalUrl);
-          fallbackBlob = verifiedVideo.blob;
-          downloadFormat = verifiedVideo.format;
-          if (downloadFormat !== format) {
-            setQuickFormat(downloadFormat);
-          }
-        }
-        const targetFileName = `${sanitizeFilename(media.title)}_${downloadFormat}.${isAudioFormat ? downloadFormat : 'mp4'}`;
-        const blobUrl = triggerBrowserDownload(fallbackBlob, targetFileName);
-        setExtractedDownloadUrl(blobUrl);
-        setDownloadProgressPercent(100);
-        setQuickProgress(
-          lang === 'en'
-            ? '✓ Video downloaded! Saved in computer Downloads.'
-            : '✓ আসল ভিডিওটি আপনার কম্পিউটারে সেভ হয়েছে!'
-        );
-        setSuccessMessage(
-          lang === 'en'
-            ? '✓ Download complete! Check your Downloads folder (Ctrl + J).'
-            : '✓ আসল ভিডিও ডাউনলোড সম্পূর্ণ হয়েছে! Downloads ফোল্ডার চেক করুন (Ctrl + J)।'
-        );
-      } catch (err: unknown) {
-        setQuickProgress(
-          lang === 'en'
-            ? err instanceof Error ? err.message : 'Extraction error, please try another quality.'
-            : 'ডাউনলোডে সমস্যা হয়েছে, অনুগ্রহ করে অন্য কোয়ালিটি বেছে নিন।'
-        );
-      }
     } finally {
       setIsQuickDownloading(false);
     }

@@ -60,6 +60,13 @@ export default async function handler(
       return;
     }
 
+    if (vidRes.headers.get('content-type')?.toLowerCase().includes('text/html')) {
+      res.statusCode = 502;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end('The upstream redirected to a web page instead of a media file. Please try again.');
+      return;
+    }
+
     const contentType = isAudio ? 'audio/mpeg' : 'video/mp4';
     const contentLength = vidRes.headers.get('content-length');
 
