@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import { extractMedia } from './extract.js';
 
 export const config = {
@@ -35,6 +36,7 @@ export default async function handler(
   const ext = isAudio ? (format === 'wav' ? 'wav' : 'mp3') : 'mp4';
   const safeTitle = customTitle.replace(/[^a-zA-Z0-9_\-\u0980-\u09FF\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 80) || 'media';
   const fileName = `${safeTitle}.${ext}`;
+  const asciiFileName = `${safeTitle.replace(/[^\x20-\x7E]/g, '_') || 'media'}.${ext}`;
 
   try {
     const extracted = await extractMedia(targetUrl, format);
@@ -62,19 +64,25 @@ export default async function handler(
     const contentLength = vidRes.headers.get('content-length');
 
     res.statusCode = 200;
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.setHeader('Content-Type', isAudio && format === 'wav' ? 'audio/wav' : contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
     if (contentLength) {
       res.setHeader('Content-Length', contentLength);
     }
     res.setHeader('Cache-Control', 'public, max-age=3600');
 
-    // Pipe stream to browser
     // @ts-expect-error fromWeb supports standard Web Streams
-    Readable.fromWeb(vidRes.body).pipe(res);
+    await pipeline(Readable.fromWeb(vidRes.body), res);
   } catch (err: unknown) {
+    if (res.headersSent) {
+      res.destroy(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
     res.statusCode = 500;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end(`Error: ${(err as Error).message}`);
+    res.end(`Error: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

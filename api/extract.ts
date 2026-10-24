@@ -13,9 +13,14 @@ export async function extractMedia(
     const initData = await initRes.json();
     if (!initData.success || !initData.progress_url) return { success: false, error: 'No stream' };
 
-    for (let i = 0; i < 20; i++) {
+    const deadline = Date.now() + 40_000;
+    while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 600));
-      const pRes = await fetch(initData.progress_url, { signal: AbortSignal.timeout(4000) });
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      const pRes = await fetch(initData.progress_url, {
+        signal: AbortSignal.timeout(Math.min(4000, remaining)),
+      });
       if (!pRes.ok) continue;
       const pData = await pRes.json();
       if (pData.download_url) {
