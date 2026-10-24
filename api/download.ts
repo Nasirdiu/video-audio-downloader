@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { Readable } from 'stream';
-import { extractMedia } from './extract';
+import { extractMedia } from './extract.js';
 
 export default async function handler(
   req: IncomingMessage & { query?: Record<string, string> },
