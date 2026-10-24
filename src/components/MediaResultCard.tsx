@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { MediaItem } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { PLATFORMS_DATA } from '../utils/platformDetector';
-import { downloadMediaStream, ExportProgress, shareOrSaveToMobileGallery, triggerBrowserDownload, isInAppBrowser, sanitizeFilename, safeTriggerDirectDownload } from '../utils/mediaExporter';
+import { downloadMediaStream, ExportProgress, shareOrSaveToMobileGallery, triggerBrowserDownload, isInAppBrowser, sanitizeFilename, safeTriggerDirectDownload, ensureMp4HasAudio } from '../utils/mediaExporter';
 import {
   Download,
   Film,
@@ -70,6 +70,7 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
 
   const handleSaveFromDownload = async (format: string) => {
     if (isQuickDownloading) return;
+    const isAudioFormat = ['mp3', 'm4a', 'wav'].includes(format);
     setIsQuickDownloading(true);
     setExtractedDownloadUrl(null);
     setDownloadProgressPercent(15);
@@ -148,10 +149,20 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
       } catch {
         // Fallback to proxy
         const vidRes = await fetch(`/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${format}`);
+        if (!vidRes.ok) throw new Error(await vidRes.text() || 'Stream fetch failed');
         videoBlob = await vidRes.blob();
       }
 
-      const targetFileName = `${sanitizeFilename(finalTitle)}_${format}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+      let downloadFormat = format;
+      if (!isAudioFormat) {
+        const verifiedVideo = await ensureMp4HasAudio(videoBlob, format, media.originalUrl);
+        videoBlob = verifiedVideo.blob;
+        downloadFormat = verifiedVideo.format;
+        if (downloadFormat !== format) {
+          setQuickFormat(downloadFormat);
+        }
+      }
+      const targetFileName = `${sanitizeFilename(finalTitle)}_${downloadFormat}.${isAudioFormat ? downloadFormat : 'mp4'}`;
 
       // Guaranteed Native Same-Origin Download into Computer Downloads
       const blobUrl = triggerBrowserDownload(videoBlob, targetFileName);
@@ -169,7 +180,17 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
           ? '✓ Real video downloaded! Check your computer Downloads folder (Ctrl + J).'
           : '✓ আসল ভিডিও ডাউনলোড সম্পূর্ণ হয়েছে! আপনার Downloads ফোল্ডার চেক করুন (Ctrl + J)।'
       );
-    } catch {
+    } catch (err: unknown) {
+      if (!isAudioFormat && err instanceof Error && err.message.toLowerCase().includes('audio')) {
+        setQuickProgress(
+          lang === 'en'
+            ? 'This video stream has no audio track. Please try another quality.'
+            : 'এই ভিডিও স্ট্রিমে অডিও ট্র্যাক নেই। অনুগ্রহ করে অন্য কোয়ালিটি চেষ্টা করুন।'
+        );
+        setSuccessMessage(null);
+        return;
+      }
+
       setQuickProgress(
         lang === 'en'
           ? 'Connecting to fallback download stream...'
@@ -177,8 +198,18 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
       );
       try {
         const fallbackRes = await fetch(`/api/download?url=${encodeURIComponent(media.originalUrl)}&format=${format}`);
-        const fallbackBlob = await fallbackRes.blob();
-        const targetFileName = `${sanitizeFilename(media.title)}_${format}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+        if (!fallbackRes.ok) throw new Error(await fallbackRes.text() || 'Fallback download failed');
+        let fallbackBlob = await fallbackRes.blob();
+        let downloadFormat = format;
+        if (!isAudioFormat) {
+          const verifiedVideo = await ensureMp4HasAudio(fallbackBlob, format, media.originalUrl);
+          fallbackBlob = verifiedVideo.blob;
+          downloadFormat = verifiedVideo.format;
+          if (downloadFormat !== format) {
+            setQuickFormat(downloadFormat);
+          }
+        }
+        const targetFileName = `${sanitizeFilename(media.title)}_${downloadFormat}.${isAudioFormat ? downloadFormat : 'mp4'}`;
         const blobUrl = triggerBrowserDownload(fallbackBlob, targetFileName);
         setExtractedDownloadUrl(blobUrl);
         setDownloadProgressPercent(100);
@@ -195,7 +226,7 @@ export const MediaResultCard: React.FC<MediaResultCardProps> = ({
       } catch (err: unknown) {
         setQuickProgress(
           lang === 'en'
-            ? 'Extraction error, please try another quality.'
+            ? err instanceof Error ? err.message : 'Extraction error, please try another quality.'
             : 'ডাউনলোডে সমস্যা হয়েছে, অনুগ্রহ করে অন্য কোয়ালিটি বেছে নিন।'
         );
       }

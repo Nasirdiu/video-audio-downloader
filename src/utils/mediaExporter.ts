@@ -15,6 +15,68 @@ export function sanitizeFilename(input: string): string {
     .slice(0, 50);
 }
 
+export async function mp4HasAudioTrack(blob: Blob): Promise<boolean> {
+  const reader = blob.stream().getReader();
+  let tail = new Uint8Array(0);
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return false;
+
+      const bytes = new Uint8Array(tail.length + value.length);
+      bytes.set(tail);
+      bytes.set(value, tail.length);
+
+      for (let i = 0; i + 16 <= bytes.length; i++) {
+        if (
+          bytes[i] === 0x68 &&
+          bytes[i + 1] === 0x64 &&
+          bytes[i + 2] === 0x6c &&
+          bytes[i + 3] === 0x72 &&
+          bytes[i + 12] === 0x73 &&
+          bytes[i + 13] === 0x6f &&
+          bytes[i + 14] === 0x75 &&
+          bytes[i + 15] === 0x6e
+        ) {
+          return true;
+        }
+      }
+
+      tail = bytes.slice(-15);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function ensureMp4HasAudio(
+  blob: Blob,
+  format: string,
+  originalUrl: string
+): Promise<{ blob: Blob; format: string }> {
+  if (await mp4HasAudioTrack(blob)) return { blob, format };
+  if (format === '720') {
+    throw new Error('The downloaded video has no audio track.');
+  }
+
+  const response = await fetch(
+    `/api/download?url=${encodeURIComponent(originalUrl)}&format=720`,
+    { signal: AbortSignal.timeout(60000) }
+  );
+  if (!response.ok) {
+    const errorMessage = await response.text();
+    throw new Error(errorMessage || 'Could not fetch an audio-enabled video stream.');
+  }
+
+  const fallbackBlob = await response.blob();
+  if (!(await mp4HasAudioTrack(fallbackBlob))) {
+    throw new Error('The available video stream does not contain an audio track.');
+  }
+
+  return { blob: fallbackBlob, format: '720' };
+}
+
 // Extract actual media download URL from user's URL using high-speed CORS extraction API (Zero Redirects)
 export async function extractRealMediaStreamUrl(
   originalUrl: string,
