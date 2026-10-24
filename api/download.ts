@@ -2,6 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { Readable } from 'stream';
 import { extractMedia } from './extract.js';
 
+export const config = {
+  maxDuration: 60,
+};
+
 export default async function handler(
   req: IncomingMessage & { query?: Record<string, string> },
   res: ServerResponse
